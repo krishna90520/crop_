@@ -1,11 +1,7 @@
 import os
-os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"  # Disable problematic watcher
-import cv2  # Ensure this import is at the top of your file
-from ultralytics import YOLO
-
+import torch
 import streamlit as st
 from PIL import Image
-import torch
 import numpy as np
 
 # Mapping of crop to the corresponding model file path
@@ -15,7 +11,15 @@ crop_model_mapping = {
     "ground nut": "groundnut_best.pt"  # Replace with actual path to ground nut model
 }
 
-# Load YOLOv5 model with absolute path
+# Labels for each crop
+CLASS_LABELS = {
+    "Paddy": ["brown_spot", "leaf_blast", "rice_hispa", "sheath_blight"],
+    "GroundNut": ["alternaria_leaf_spot", "leaf_spot", "rosette", "rust"],
+    "Cotton": ["bacterial_blight", "curl_virus", "herbicide_growth_damage",
+               "leaf_hopper_jassids", "leaf_redding", "leaf_variegation"]
+}
+
+# Load classification model with absolute path
 @st.cache_resource
 def load_model(crop_name):
     try:
@@ -23,28 +27,48 @@ def load_model(crop_name):
         if model_path is None:
             raise ValueError(f"No model found for crop: {crop_name}")
 
-        # Load model using a direct path instead of torch.hub
-        model = torch.hub.load(
-            'ultralytics/yolov5',
-            'custom',
-            path=model_path,
-            force_reload=True,
-            trust_repo=True
-        )
+        # Load the classification model
+        model = torch.load(model_path)  # Load the model using torch.load (since it's a classification model)
+        model.eval()  # Set model to evaluation mode
         return model
     except Exception as e:
         st.error(f"Model loading failed: {str(e)}")
         return None
 
 
-# Detection function
-def detect_objects(image, conf_threshold, crop_name):
+# Classification function
+def classify_image(image, crop_name):
     model = load_model(crop_name)
     if model is None:
         return None
-    model.conf = conf_threshold
-    results = model(image)
-    return results
+
+    # Preprocess the image for classification
+    img_tensor = preprocess_image(image)
+
+    with torch.no_grad():
+        # Perform the classification
+        outputs = model(img_tensor)  # Run the image through the model
+        probabilities = torch.nn.Softmax(dim=1)(outputs)  # Convert logits to probabilities
+        max_prob, predicted_class_idx = torch.max(probabilities, dim=1)
+
+    predicted_class = CLASS_LABELS[crop_name][predicted_class_idx.item()]
+    confidence = max_prob.item()
+
+    return predicted_class, confidence
+
+
+# Function to preprocess the image for classification
+def preprocess_image(image):
+    # Convert PIL image to a tensor and normalize it if required by your model
+    # Assuming the model expects input size [1, 3, 224, 224] for RGB image (resizing and normalization may be different)
+    transform = torch.nn.Sequential(
+        torch.transforms.Resize((224, 224)),  # Resize to the expected input size
+        torch.transforms.ToTensor(),
+        torch.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    )
+    img_tensor = transform(image).unsqueeze(0)  # Add batch dimension
+    return img_tensor
+
 
 # Streamlit UI
 st.markdown("""
@@ -65,40 +89,33 @@ crop_selection = st.selectbox("Select the crop", ["Paddy", "cotton", "ground nut
 st.write(f"Selected Crop: {crop_selection}")
 
 uploaded_image = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
-conf_threshold = st.slider("Set Confidence Threshold", 0.0, 1.0, 0.25, 0.05)
-
-# Precautions dictionary (fill this with your actual data)
-precautions_dict = {
-    "disease1": ["Precaution 1", "Precaution 2"],
-    "disease2": ["Precaution A", "Precaution B"],
-    # Add your actual disease precautions here
-}
 
 if uploaded_image:
     img = Image.open(uploaded_image).convert("RGB")
     st.image(img, caption="Uploaded Image.", use_container_width=True)
 
-    if st.button("Run Detection"):
-        with st.spinner("Running detection..."):  # Show loading spinner
-            results = detect_objects(img, conf_threshold, crop_selection)
-            if results is None:
-                st.error("Detection failed. Check model logs.")
+    if st.button("Run Classification"):
+        with st.spinner("Running classification..."):  # Show loading spinner
+            predicted_class, confidence = classify_image(img, crop_selection)
+
+            if predicted_class is None:
+                st.error("Classification failed. Check model logs.")
             else:
-                st.subheader("Detection Results")
-                inferenced_img = np.squeeze(results.render())
-                st.image(inferenced_img, caption="Detected Objects", use_container_width=True)
+                st.subheader("Classification Result")
+                st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
 
-                # Display predictions
-                preds = results.pandas().xyxy[0]
-                if not preds.empty:
-                    max_conf_row = preds.loc[preds['confidence'].idxmax()]
-                    st.success(f"Prediction: {max_conf_row['name']} (Confidence: {max_conf_row['confidence']:.2f})")
+                # Display the precautionary measures for the disease
+                precautions_dict = {
+                    "brown_spot": ["Use resistant varieties", "Apply fungicides"],
+                    "leaf_blast": ["Use resistant varieties", "Avoid excess nitrogen fertilization"],
+                    "rice_hispa": ["Use insecticides", "Manual removal of larvae"],
+                    "sheath_blight": ["Use fungicides", "Improve water management"],
+                    # Add more diseases with precautions as needed
+                }
 
-                    if max_conf_row['name'] in precautions_dict:
-                        st.subheader("Precautions/Remedies:")
-                        for item in precautions_dict[max_conf_row['name']]:
-                            st.write(f"- {item}")
-                    else:
-                        st.write("No precautions available.")
+                if predicted_class in precautions_dict:
+                    st.subheader("Precautions/Remedies:")
+                    for item in precautions_dict[predicted_class]:
+                        st.write(f"- {item}")
                 else:
-                    st.warning("No objects detected.")
+                    st.write("No precautions available.")
