@@ -1,14 +1,18 @@
+import os
 import torch
 import streamlit as st
 from PIL import Image
 import numpy as np
-from torchvision import transforms  # Import the transforms module from torchvision
+from torchvision import transforms  # For preprocessing the image before inference
+
+# Set up environment variables and model paths
+os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"  # Disable problematic watcher
 
 # Mapping of crop to the corresponding model file path
 crop_model_mapping = {
     "Paddy": "classification_4Disease_best.pt",  # Replace with actual path to paddy model
-    "cotton": "re_do_cotton_2best.pt",  # Replace with actual path to cotton model
-    "ground nut": "groundnut_best.pt"  # Replace with actual path to groundnut model
+    "Cotton": "re_do_cotton_2best.pt",  # Replace with actual path to cotton model
+    "GroundNut": "groundnut_best.pt"  # Replace with actual path to groundnut model
 }
 
 # Define class labels for each crop
@@ -23,6 +27,8 @@ CLASS_LABELS = {
 @st.cache_resource
 def load_model(crop_name):
     try:
+        # Standardizing crop_name to avoid key issues
+        crop_name = crop_name.strip().capitalize()
         model_path = crop_model_mapping.get(crop_name, None)
         if model_path is None:
             raise ValueError(f"No model found for crop: {crop_name}")
@@ -67,7 +73,11 @@ def classify_image(img, crop_name):
     confidence, class_idx = torch.max(output, dim=0)
     
     # Map the class index to the corresponding label
-    class_label = CLASS_LABELS[crop_name][class_idx.item()]
+    try:
+        class_label = CLASS_LABELS[crop_name][class_idx.item()]
+    except KeyError:
+        st.error(f"Error: '{crop_name}' not found in class labels. Please check the crop name.")
+        return None, None
     
     return class_label, confidence.item()
 
@@ -86,7 +96,7 @@ st.markdown('<style>.red-label {color: green; font-weight: bold;}</style>', unsa
 st.markdown('<div class="red-label">Select the crop</div>', unsafe_allow_html=True)
 
 # Crop selection dropdown
-crop_selection = st.selectbox("Select the crop", ["Paddy", "cotton", "ground nut"], label_visibility="hidden")
+crop_selection = st.selectbox("Select the crop", ["Paddy", "Cotton", "GroundNut"], label_visibility="hidden")
 st.write(f"Selected Crop: {crop_selection}")
 
 # Image upload
