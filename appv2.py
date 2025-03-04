@@ -1,5 +1,3 @@
-
-
 import os
 os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"  # Disable problematic watcher
 import cv2  # Ensure this import is at the top of your file
@@ -10,12 +8,21 @@ from PIL import Image
 import torch
 import numpy as np
 
+# Mapping of crop to the corresponding model file path
+crop_model_mapping = {
+    "Paddy": "path/to/paddy_model.pt",  # Replace with actual path to paddy model
+    "cotton": "path/to/cotton_model.pt",  # Replace with actual path to cotton model
+    "ground nut": "path/to/ground_nut_model.pt"  # Replace with actual path to ground nut model
+}
+
 # Load YOLOv5 model with absolute path
 @st.cache_resource
-def load_model():
+def load_model(crop_name):
     try:
-        #model_path = os.path.abspath("yolov5best_aug_false.pt")
-        model_path = os.path.abspath("agmarks_final.pt")
+        model_path = crop_model_mapping.get(crop_name, None)
+        if model_path is None:
+            raise ValueError(f"No model found for crop: {crop_name}")
+
         # Load model using a direct path instead of torch.hub
         model = torch.hub.load(
             'ultralytics/yolov5',
@@ -31,8 +38,8 @@ def load_model():
 
 
 # Detection function
-def detect_objects(image, conf_threshold):
-    model = load_model()
+def detect_objects(image, conf_threshold, crop_name):
+    model = load_model(crop_name)
     if model is None:
         return None
     model.conf = conf_threshold
@@ -52,7 +59,9 @@ st.markdown('<style>.red-label {color: red; font-weight: bold;}</style>', unsafe
 st.markdown('<div class="red-label">Diseases Trained on: <br> Brown spots <br> Rice\'s hispa <br> Sheath blight</div>', unsafe_allow_html=True)
 st.markdown('<style>.red-label {color: green; font-weight: bold;}</style>', unsafe_allow_html=True)
 st.markdown('<div class="red-label">Select the crop</div>', unsafe_allow_html=True)
-crop_selection = st.selectbox("Select the crop", ["Paddy", "Wheat", "Maize"], label_visibility="hidden")
+
+# Crop selection dropdown
+crop_selection = st.selectbox("Select the crop", ["Paddy", "cotton", "ground nut"], label_visibility="hidden")
 st.write(f"Selected Crop: {crop_selection}")
 
 uploaded_image = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
@@ -71,7 +80,7 @@ if uploaded_image:
 
     if st.button("Run Detection"):
         with st.spinner("Running detection..."):  # Show loading spinner
-            results = detect_objects(img, conf_threshold)
+            results = detect_objects(img, conf_threshold, crop_selection)
             if results is None:
                 st.error("Detection failed. Check model logs.")
             else:
