@@ -3,15 +3,16 @@ import torch
 import streamlit as st
 from PIL import Image
 import numpy as np
+from pathlib import Path
 
 # Mapping of crop to the corresponding model file path
 crop_model_mapping = {
     "Paddy": "classification_4Disease_best.pt",  # Replace with actual path to paddy model
     "cotton": "re_do_cotton_2best.pt",  # Replace with actual path to cotton model
-    "ground nut": "groundnut_best.pt"  # Replace with actual path to ground nut model
+    "ground nut": "groundnut_best.pt"  # Replace with actual path to groundnut model
 }
 
-# Labels for each crop
+# Define class labels for each crop
 CLASS_LABELS = {
     "Paddy": ["brown_spot", "leaf_blast", "rice_hispa", "sheath_blight"],
     "GroundNut": ["alternaria_leaf_spot", "leaf_spot", "rosette", "rust"],
@@ -19,7 +20,7 @@ CLASS_LABELS = {
                "leaf_hopper_jassids", "leaf_redding", "leaf_variegation"]
 }
 
-# Load classification model with absolute path
+# Load YOLOv5 classification model with absolute path
 @st.cache_resource
 def load_model(crop_name):
     try:
@@ -27,49 +28,51 @@ def load_model(crop_name):
         if model_path is None:
             raise ValueError(f"No model found for crop: {crop_name}")
 
-        # Load the classification model on the CPU regardless of the device it was saved on
-        model = torch.load(model_path, map_location=torch.device('cpu'))  # Ensure the model is loaded to CPU
-        model.eval()  # Set model to evaluation mode
+        # Ensure you're loading the model on CPU
+        model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True, device='cpu')
+
+        # Set the model to evaluation mode
+        model.eval()
         return model
     except Exception as e:
         st.error(f"Model loading failed: {str(e)}")
         return None
 
-
-
-# Classification function
-def classify_image(image, crop_name):
-    model = load_model(crop_name)
-    if model is None:
-        return None
-
-    # Preprocess the image for classification
-    img_tensor = preprocess_image(image)
-
-    with torch.no_grad():
-        # Perform the classification
-        outputs = model(img_tensor)  # Run the image through the model
-        probabilities = torch.nn.Softmax(dim=1)(outputs)  # Convert logits to probabilities
-        max_prob, predicted_class_idx = torch.max(probabilities, dim=1)
-
-    predicted_class = CLASS_LABELS[crop_name][predicted_class_idx.item()]
-    confidence = max_prob.item()
-
-    return predicted_class, confidence
-
-
-# Function to preprocess the image for classification
-def preprocess_image(image):
-    # Convert PIL image to a tensor and normalize it if required by your model
-    # Assuming the model expects input size [1, 3, 224, 224] for RGB image (resizing and normalization may be different)
-    transform = torch.nn.Sequential(
-        torch.transforms.Resize((224, 224)),  # Resize to the expected input size
-        torch.transforms.ToTensor(),
-        torch.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    )
-    img_tensor = transform(image).unsqueeze(0)  # Add batch dimension
+# Preprocess image for model input (resize and normalize)
+def preprocess_image(img):
+    img = img.convert('RGB')  # Ensure the image is in RGB format
+    preprocess = transforms.Compose([
+        transforms.Resize((640, 640)),  # Resize to 640x640 as required by YOLOv5
+        transforms.ToTensor(),
+    ])
+    img_tensor = preprocess(img).unsqueeze(0)  # Add batch dimension
     return img_tensor
 
+# Perform classification and get predicted class and confidence
+def classify_image(img, crop_name):
+    model = load_model(crop_name)
+    if model is None:
+        return None, None
+
+    # Preprocess the image
+    img_tensor = preprocess_image(img)
+
+    # Perform inference on the image
+    with torch.no_grad():
+        results = model(img_tensor)
+
+    # Get results from the model
+    preds = results.pandas().xyxy[0]  # Get the predictions as a pandas DataFrame
+    if not preds.empty:
+        # Get the highest confidence prediction
+        max_conf_row = preds.loc[preds['confidence'].idxmax()]
+        predicted_class = max_conf_row['name']
+        confidence = max_conf_row['confidence']
+    else:
+        predicted_class = None
+        confidence = None
+    
+    return predicted_class, confidence
 
 # Streamlit UI
 st.markdown("""
@@ -89,8 +92,10 @@ st.markdown('<div class="red-label">Select the crop</div>', unsafe_allow_html=Tr
 crop_selection = st.selectbox("Select the crop", ["Paddy", "cotton", "ground nut"], label_visibility="hidden")
 st.write(f"Selected Crop: {crop_selection}")
 
+# Image upload
 uploaded_image = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
+# Run classification when user clicks button
 if uploaded_image:
     img = Image.open(uploaded_image).convert("RGB")
     st.image(img, caption="Uploaded Image.", use_container_width=True)
@@ -98,20 +103,18 @@ if uploaded_image:
     if st.button("Run Classification"):
         with st.spinner("Running classification..."):  # Show loading spinner
             predicted_class, confidence = classify_image(img, crop_selection)
-
             if predicted_class is None:
                 st.error("Classification failed. Check model logs.")
             else:
-                st.subheader("Classification Result")
+                st.subheader("Prediction Results")
                 st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
 
-                # Display the precautionary measures for the disease
+                # Display precautions for the disease (example)
                 precautions_dict = {
                     "brown_spot": ["Use resistant varieties", "Apply fungicides"],
                     "leaf_blast": ["Use resistant varieties", "Avoid excess nitrogen fertilization"],
                     "rice_hispa": ["Use insecticides", "Manual removal of larvae"],
                     "sheath_blight": ["Use fungicides", "Improve water management"],
-                    # Add more diseases with precautions as needed
                 }
 
                 if predicted_class in precautions_dict:
