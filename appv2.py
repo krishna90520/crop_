@@ -1,9 +1,8 @@
-import os
 import torch
 import streamlit as st
 from PIL import Image
 import numpy as np
-from pathlib import Path
+from torchvision import transforms  # Import the transforms module from torchvision
 
 # Mapping of crop to the corresponding model file path
 crop_model_mapping = {
