@@ -1,11 +1,5 @@
-streamlit
-torch==2.2.0
-torchvision
-torchaudio
-Pillow
-numpy<2.0
-rich
-opencv-python-headless==4.6.0.66
-IPython
-ultralytics
-setuptools  # Add this line
+streamlit==1.16.0
+torch==1.12.1
+Pillow==9.0.1
+numpy==1.21.0
+opencv-python==4.5.5.64
