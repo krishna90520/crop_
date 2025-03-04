@@ -140,96 +140,77 @@
 
 
 
-
-
-
-
-
 import os
-import torch
+import cv2  # Ensure this import is at the top of your file
+from ultralytics import YOLO
 import streamlit as st
 from PIL import Image
+import torch
 import numpy as np
-from torchvision import transforms  # For preprocessing the image before inference
+from torchvision import transforms
+import urllib.request
 
-# Set up environment variables and model paths
-os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"  # Disable problematic watcher
+# Set environment variable to disable Streamlit watcher
+os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"
 
 # Mapping of crop to the corresponding model file path
 crop_model_mapping = {
     "Paddy": "classification_4Disease_best.pt",  # Replace with actual path to paddy model
     "Cotton": "re_do_cotton_2best.pt",  # Replace with actual path to cotton model
-    "GroundNut": "groundnut_best.pt"  # Replace with actual path to groundnut model
+    "Groundnut": "groundnut_best.pt"  # Replace with actual path to ground nut model
 }
 
-# Define class labels for each crop
+# Class labels for each crop
 CLASS_LABELS = {
     "Paddy": ["brown_spot", "leaf_blast", "rice_hispa", "sheath_blight"],
-    "GroundNut": ["alternaria_leaf_spot", "leaf_spot", "rosette", "rust"],
-    "Cotton": ["bacterial_blight", "curl_virus", "herbicide_growth_damage",
-               "leaf_hopper_jassids", "leaf_redding", "leaf_variegation"]
+    "Groundnut": ["alternaria_leaf_spot", "leaf_spot", "rosette", "rust"],
+    "Cotton": ["bacterial_blight", "curl_virus", "herbicide_growth_damage", "leaf_hopper_jassids", "leaf_redding", "leaf_variegation"]
 }
 
-# Load YOLOv5 classification model with absolute path
+# Function to download the model from GitHub if it's not already present
+def download_model(crop_name):
+    model_url = f"https://github.com/krishna90520/crop_/raw/main/{crop_model_mapping[crop_name]}"
+    model_path = crop_model_mapping[crop_name]
+    
+    # If model is not present, download it
+    if not os.path.exists(model_path):
+        urllib.request.urlretrieve(model_url, model_path)
+    return model_path
+
+# Load the model for a given crop
 @st.cache_resource
 def load_model(crop_name):
+    model_path = download_model(crop_name)
     try:
-        # Standardizing crop_name to avoid key issues
-        crop_name = crop_name.strip().capitalize()
-        model_path = crop_model_mapping.get(crop_name, None)
-        if model_path is None:
-            raise ValueError(f"No model found for crop: {crop_name}")
-
-        # Ensure you're loading the model on CPU
-        model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True, device='cpu')
-
-        # Set the model to evaluation mode
-        model.eval()
+        model = YOLO(model_path)  # Load the YOLO model
         return model
     except Exception as e:
-        st.error(f"Model loading failed: {str(e)}")
+        st.error(f"Model loading failed for {crop_name}: {str(e)}")
         return None
 
-# Preprocess image for model input (resize and normalize)
+# Image preprocessing function
 def preprocess_image(img):
-    img = img.convert('RGB')  # Ensure the image is in RGB format
     preprocess = transforms.Compose([
-        transforms.Resize((224, 224)),  # Resize to 224x224 as required by YOLOv5 classification model
+        transforms.Resize((224, 224)),  # Resize image to 224x224
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalization (ImageNet stats)
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize the image like ImageNet
     ])
-    img_tensor = preprocess(img).unsqueeze(0)  # Add batch dimension
+    img_tensor = preprocess(img).unsqueeze(0)  # Add batch dimension (1, 3, 224, 224)
     return img_tensor
 
-# Perform classification and get predicted class and confidence
+# Function to classify the image using the loaded model
 def classify_image(img, crop_name):
     model = load_model(crop_name)
     if model is None:
         return None, None
 
-    # Preprocess the image
     img_tensor = preprocess_image(img)
-
-    # Perform inference on the image
-    with torch.no_grad():
-        results = model(img_tensor)
-
-    # Get results from the model
-    output = results[0]  # This contains the raw output (class logits)
-    
-    # Get the class index with the highest confidence
-    confidence, class_idx = torch.max(output, dim=0)
-    
-    # Map the class index to the corresponding label
-    try:
-        class_label = CLASS_LABELS[crop_name][class_idx.item()]
-    except KeyError:
-        st.error(f"Error: '{crop_name}' not found in class labels. Please check the crop name.")
-        return None, None
-    
+    output = model(img_tensor)  # Run inference on the image tensor
+    confidence, class_idx = torch.max(output, dim=1)  # Get the class index with highest confidence
+    class_label = CLASS_LABELS[crop_name][class_idx.item()]  # Map the class index to the label
     return class_label, confidence.item()
 
-# Streamlit UI
+# Streamlit UI components
 st.markdown("""
     <style>
     .title { text-align: center; color: #4CAF50; font-size: 36px; }
@@ -244,13 +225,13 @@ st.markdown('<style>.red-label {color: green; font-weight: bold;}</style>', unsa
 st.markdown('<div class="red-label">Select the crop</div>', unsafe_allow_html=True)
 
 # Crop selection dropdown
-crop_selection = st.selectbox("Select the crop", ["Paddy", "Cotton", "GroundNut"], label_visibility="hidden")
+crop_selection = st.selectbox("Select the crop", ["Paddy", "Cotton", "Groundnut"], label_visibility="hidden")
 st.write(f"Selected Crop: {crop_selection}")
 
-# Image upload
+# Image uploader and confidence slider
 uploaded_image = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+conf_threshold = st.slider("Set Confidence Threshold", 0.0, 1.0, 0.25, 0.05)
 
-# Run classification when user clicks button
 if uploaded_image:
     img = Image.open(uploaded_image).convert("RGB")
     st.image(img, caption="Uploaded Image.", use_container_width=True)
@@ -261,20 +242,30 @@ if uploaded_image:
             if predicted_class is None:
                 st.error("Classification failed. Check model logs.")
             else:
-                st.subheader("Prediction Results")
-                st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
-
-                # Display precautions for the disease (example)
+                st.subheader("Classification Result")
+                st.success(f"Predicted Class: {predicted_class} with Confidence: {confidence:.2f}")
+                
+                # Display disease-specific precautions
                 precautions_dict = {
-                    "brown_spot": ["Use resistant varieties", "Apply fungicides"],
-                    "leaf_blast": ["Use resistant varieties", "Avoid excess nitrogen fertilization"],
-                    "rice_hispa": ["Use insecticides", "Manual removal of larvae"],
-                    "sheath_blight": ["Use fungicides", "Improve water management"],
+                    "brown_spot": ["Apply fungicides.", "Remove infected leaves."],
+                    "leaf_blast": ["Improve field drainage.", "Apply fungicides."],
+                    "rice_hispa": ["Use insecticides.", "Destroy infested crops."],
+                    "sheath_blight": ["Apply fungicides.", "Avoid excessive nitrogen use."],
+                    "alternaria_leaf_spot": ["Remove infected leaves.", "Use fungicides."],
+                    "leaf_spot": ["Prune affected plants.", "Use resistant varieties."],
+                    "rosette": ["Use resistant varieties.", "Apply pesticides."],
+                    "rust": ["Apply fungicides.", "Ensure proper field spacing."],
+                    "bacterial_blight": ["Use resistant varieties.", "Apply copper-based fungicides."],
+                    "curl_virus": ["Use virus-resistant varieties.", "Remove infected plants."],
+                    "herbicide_growth_damage": ["Avoid herbicide misuse.", "Improve soil conditions."],
+                    "leaf_hopper_jassids": ["Apply insecticides.", "Remove weeds."],
+                    "leaf_redding": ["Prune affected plants.", "Use fungicides."],
+                    "leaf_variegation": ["Use appropriate pesticides.", "Maintain soil health."]
                 }
 
-                if predicted_class in precautions_dict:
+                if predicted_class.lower() in precautions_dict:
                     st.subheader("Precautions/Remedies:")
-                    for item in precautions_dict[predicted_class]:
+                    for item in precautions_dict[predicted_class.lower()]:
                         st.write(f"- {item}")
                 else:
                     st.write("No precautions available.")
