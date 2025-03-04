@@ -27,13 +27,14 @@ def load_model(crop_name):
         if model_path is None:
             raise ValueError(f"No model found for crop: {crop_name}")
 
-        # Load the classification model
-        model = torch.load(model_path)  # Load the model using torch.load (since it's a classification model)
+        # Load the classification model on the CPU regardless of the device it was saved on
+        model = torch.load(model_path, map_location=torch.device('cpu'))  # Ensure the model is loaded to CPU
         model.eval()  # Set model to evaluation mode
         return model
     except Exception as e:
         st.error(f"Model loading failed: {str(e)}")
         return None
+
 
 
 # Classification function
