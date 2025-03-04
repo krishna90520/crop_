@@ -10,9 +10,9 @@ import numpy as np
 
 # Mapping of crop to the corresponding model file path
 crop_model_mapping = {
-    "Paddy": "path/to/paddy_model.pt",  # Replace with actual path to paddy model
-    "cotton": "path/to/cotton_model.pt",  # Replace with actual path to cotton model
-    "ground nut": "path/to/ground_nut_model.pt"  # Replace with actual path to ground nut model
+    "Paddy": "classification_4Disease_best.pt",  # Replace with actual path to paddy model
+    "cotton": "re_do_cotton_2best.pt",  # Replace with actual path to cotton model
+    "ground nut": "groundnut_best.pt"  # Replace with actual path to ground nut model
 }
 
 # Load YOLOv5 model with absolute path
