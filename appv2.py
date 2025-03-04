@@ -145,8 +145,6 @@
 
 
 
-
-
 import os
 import torch
 import streamlit as st
@@ -196,8 +194,9 @@ def load_model(crop_name):
 def preprocess_image(img):
     img = img.convert('RGB')  # Ensure the image is in RGB format
     preprocess = transforms.Compose([
-        transforms.Resize((640, 640)),  # Resize to 640x640 as required by YOLOv5
+        transforms.Resize((224, 224)),  # Resize to 224x224 as required by YOLOv5 classification model
         transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalization (ImageNet stats)
     ])
     img_tensor = preprocess(img).unsqueeze(0)  # Add batch dimension
     return img_tensor
