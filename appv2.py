@@ -12,7 +12,7 @@ os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"  # Disable problematic w
 crop_model_mapping = {
     "Paddy": "classification_4Disease_best.pt",  # Replace with actual path to paddy model
     "Cotton": "re_do_cotton_2best.pt",  # Replace with actual path to cotton model
-    "GroundNut": "groundnut_best.pt"  # Replace with actual path to groundnut model
+    "GroundNut": "bhanu.pt"  # Replace with actual path to groundnut model
 }
 
 # Define class labels for each crop
