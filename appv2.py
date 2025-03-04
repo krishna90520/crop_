@@ -61,17 +61,15 @@ def classify_image(img, crop_name):
         results = model(img_tensor)
 
     # Get results from the model
-    preds = results.pandas().xyxy[0]  # Get the predictions as a pandas DataFrame
-    if not preds.empty:
-        # Get the highest confidence prediction
-        max_conf_row = preds.loc[preds['confidence'].idxmax()]
-        predicted_class = max_conf_row['name']
-        confidence = max_conf_row['confidence']
-    else:
-        predicted_class = None
-        confidence = None
+    output = results[0]  # This contains the raw output (class logits)
     
-    return predicted_class, confidence
+    # Get the class index with the highest confidence
+    confidence, class_idx = torch.max(output, dim=0)
+    
+    # Map the class index to the corresponding label
+    class_label = CLASS_LABELS[crop_name][class_idx.item()]
+    
+    return class_label, confidence.item()
 
 # Streamlit UI
 st.markdown("""
