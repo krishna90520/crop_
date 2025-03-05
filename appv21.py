@@ -4,10 +4,9 @@ import streamlit as st
 from PIL import Image
 import numpy as np
 from torchvision import transforms  # For preprocessing the image before inference
+import requests
 
-import os
-
-# Ensure the cache directory exists
+# Ensure the cache directory exists (optional, as Streamlit Cloud uses a temp directory for caching)
 cache_dir = os.path.expanduser('~/.cache/torch/hub/')
 os.makedirs(cache_dir, exist_ok=True)
 
@@ -16,9 +15,9 @@ os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"  # Disable problematic w
 
 # Mapping of crop to the corresponding model file path
 crop_model_mapping = {
-    "Paddy": "classification_4Disease_best.pt",  # Replace with actual path to paddy model
-    "Cotton": "re_do_cotton_2best.pt",  # Replace with actual path to cotton model
-    "Groundnut": "groundnut_best.pt"  # Replace with actual path to groundnut model
+    "Paddy": "https://your-storage-location/classification_4Disease_best.pt",  # Replace with actual model URL
+    "Cotton": "https://your-storage-location/re_do_cotton_2best.pt",  # Replace with actual model URL
+    "Groundnut": "https://your-storage-location/groundnut_best.pt"  # Replace with actual model URL
 }
 
 # Define class labels for each crop
@@ -29,21 +28,29 @@ CLASS_LABELS = {
                "leaf_hopper_jassids", "leaf_redding", "leaf_variegation"]
 }
 
-# Load YOLOv5 classification model using Ultralytics' API
+# Cache model loading to avoid reloading on every classification
 @st.cache_resource
 def load_model(crop_name):
+    """Loads the YOLOv5 model only once per crop type."""
     try:
-        # Standardizing crop_name to avoid key issues
+        # Handle special cases where capitalization might fail
         crop_name = crop_name.strip().capitalize()  # Capitalizes only the first letter
 
-        # Handle special cases where standard capitalization fails
+        # Handle special cases for crop names
         crop_name = {"Groundnut": "Groundnut", "Cotton": "Cotton", "Paddy": "Paddy"}.get(crop_name, crop_name)
 
-        model_path = crop_model_mapping.get(crop_name, None)
-        if model_path is None:
+        model_url = crop_model_mapping.get(crop_name, None)
+        if model_url is None:
             raise ValueError(f"No model found for crop: {crop_name}")
 
-        # Ensure you're loading the model using Ultralytics YOLOv5
+        # Download the model to the temporary directory
+        model_path = os.path.join("/tmp", f"{crop_name}_model.pt")
+        if not os.path.exists(model_path):
+            response = requests.get(model_url)
+            with open(model_path, 'wb') as f:
+                f.write(response.content)
+
+        # Load the model using Ultralytics YOLOv5
         model = torch.hub.load('ultralytics/yolov5:v7.0', 'custom', path=model_path, force_reload=True, device='cpu')
 
         # Set the model to evaluation mode
