@@ -117,12 +117,6 @@
 
 
 
-
-
-
-
-
-
 import os
 import pathlib
 import streamlit as st
@@ -132,6 +126,9 @@ import numpy as np
 from PIL import Image
 from torchvision import transforms
 from pathlib import Path
+
+# Set environment variable to specify the Torch cache location
+os.environ['TORCH_HOME'] = '/path/to/cache'  # Replace with a valid path on your system
 
 # Ensure compatibility with Windows paths
 temp = pathlib.PosixPath
@@ -163,7 +160,8 @@ def load_model(crop_type):
             st.error(f"Model not found: {model_path}")
             return None
 
-        model = torch.hub.load("ultralytics/yolov5", "custom", path=str(model_path), force_reload=True)
+        # Try loading the model directly if it's a custom `.pt` file
+        model = torch.load(model_path)
         model.eval()  # Set to evaluation mode
         return model
     except Exception as e:
