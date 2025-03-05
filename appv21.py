@@ -5,6 +5,12 @@ from PIL import Image
 import numpy as np
 from torchvision import transforms  # For preprocessing the image before inference
 
+import os
+
+# Ensure the cache directory exists
+cache_dir = os.path.expanduser('~/.cache/torch/hub/')
+os.makedirs(cache_dir, exist_ok=True)
+
 # Set up environment variables and model paths
 os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"  # Disable problematic watcher
 
