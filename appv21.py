@@ -38,7 +38,7 @@ def load_model(crop_name):
             raise ValueError(f"No model found for crop: {crop_name}")
 
         # Ensure you're loading the model on CPU
-        model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True, device='cpu')
+        model = torch.load(model_path, map_location='cpu')  # Use direct loading via torch.load
 
         # Set the model to evaluation mode
         model.eval()
@@ -135,12 +135,3 @@ if uploaded_image:
                         st.write(f"- {item}")
                 else:
                     st.write("No precautions available.")
-
-
-
-
-
-
-
-
-
