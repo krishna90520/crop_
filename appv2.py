@@ -101,7 +101,7 @@ st.markdown('<style>.red-label {color: green; font-weight: bold;}</style>', unsa
 st.markdown('<div class="red-label">Select the crop</div>', unsafe_allow_html=True)
 
 # Crop selection dropdown
-crop_selection = st.selectbox("Select the crop", ["Paddy", "Cotton", "GroundNut"], label_visibility="hidden")
+crop_selection = st.selectbox("Select the crop", ["Paddy", "Cotton", "Groundnut"], label_visibility="hidden")
 st.write(f"Selected Crop: {crop_selection}")
 
 # Image upload
