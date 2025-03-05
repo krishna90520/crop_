@@ -6,14 +6,17 @@ import numpy as np
 from torchvision import transforms  # For preprocessing the image before inference
 import requests
 
-# Ensure the cache directory exists (optional, as Streamlit Cloud uses a temp directory for caching)
+# Ensure the cache directory exists
 cache_dir = os.path.expanduser('~/.cache/torch/hub/')
 os.makedirs(cache_dir, exist_ok=True)
+
+# Set environment variable to avoid cache-related issues
+os.environ["TORCH_HOME"] = "/tmp/torch_cache"  # Avoid the default cache directory for Torch
 
 # Set up environment variables and model paths
 os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"  # Disable problematic watcher
 
-# Mapping of crop to the corresponding model file path
+# Mapping of crop to the corresponding model file path (GitHub raw URLs)
 crop_model_mapping = {
     "Paddy": "https://github.com/krishna90520/crop_/raw/refs/heads/main/classification_4Disease_best.pt",  # Replace with actual model URL
     "Cotton": "https://github.com/krishna90520/crop_/raw/refs/heads/main/re_do_cotton_2best.pt",  # Replace with actual model URL
@@ -148,3 +151,4 @@ if uploaded_image:
                         st.write(f"- {item}")
                 else:
                     st.write("No precautions available.")
+
