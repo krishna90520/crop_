@@ -23,6 +23,7 @@ CLASS_LABELS = {
                "leaf_hopper_jassids", "leaf_redding", "leaf_variegation"]
 }
 
+# Load YOLOv5 classification model using Ultralytics' API
 @st.cache_resource
 def load_model(crop_name):
     try:
@@ -36,8 +37,8 @@ def load_model(crop_name):
         if model_path is None:
             raise ValueError(f"No model found for crop: {crop_name}")
 
-        # Use torch.hub to load YOLOv5 model
-        model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True, device='cpu')
+        # Ensure you're loading the model using Ultralytics YOLOv5
+        model = torch.hub.load('ultralytics/yolov5:v7.0', 'custom', path=model_path, force_reload=True, device='cpu')
 
         # Set the model to evaluation mode
         model.eval()
