@@ -28,7 +28,11 @@ CLASS_LABELS = {
 def load_model(crop_name):
     try:
         # Standardizing crop_name to avoid key issues
-        crop_name = crop_name.strip().capitalize()
+        crop_name = crop_name.strip().capitalize()  # Capitalizes only the first letter
+
+        # Handle special cases where standard capitalization fails
+        crop_name = {"Groundnut": "Groundnut", "Cotton": "Cotton", "Paddy": "Paddy"}.get(crop_name, crop_name)
+
         model_path = crop_model_mapping.get(crop_name, None)
         if model_path is None:
             raise ValueError(f"No model found for crop: {crop_name}")
@@ -42,6 +46,7 @@ def load_model(crop_name):
     except Exception as e:
         st.error(f"Model loading failed: {str(e)}")
         return None
+
 
 # Preprocess image for model input (resize and normalize)
 def preprocess_image(img):
