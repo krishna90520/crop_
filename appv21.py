@@ -16,7 +16,7 @@ os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"  # Disable problematic w
 # Mapping of crop to the corresponding model file path
 crop_model_mapping = {
     "Paddy": "https://github.com/krishna90520/crop_/raw/refs/heads/main/classification_4Disease_best.pt",  # Replace with actual model URL
-    "Cotton": "https://your-storage-location/re_do_cotton_2best.pt",  # Replace with actual model URL
+    "Cotton": "https://github.com/krishna90520/crop_/raw/refs/heads/main/re_do_cotton_2best.pt",  # Replace with actual model URL
     "Groundnut": "https://your-storage-location/groundnut_best.pt"  # Replace with actual model URL
 }
 
