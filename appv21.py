@@ -6,6 +6,9 @@ import numpy as np
 from torchvision import transforms  # For preprocessing the image before inference
 import requests
 
+# GitHub Personal Access Token (replace with your own token)
+GITHUB_TOKEN = "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"  # Replace with your token
+
 # Ensure the cache directory exists
 cache_dir = os.path.expanduser('~/.cache/torch/hub/')
 os.makedirs(cache_dir, exist_ok=True)
@@ -24,9 +27,9 @@ os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"  # Disable problematic w
 
 # Mapping of crop to the corresponding model file path (GitHub raw URLs)
 crop_model_mapping = {
-    "Paddy": "https://github.com/krishna90520/crop_/raw/refs/heads/main/classification_4Disease_best.pt",  # Replace with actual model URL
-    "Cotton": "https://github.com/krishna90520/crop_/raw/refs/heads/main/re_do_cotton_2best.pt",  # Replace with actual model URL
-    "Groundnut": "https://github.com/krishna90520/crop_/raw/refs/heads/main/groundnut_best.pt"  # Replace with actual model URL
+    "Paddy": "https://github.com/krishna90520/crop_/raw/refs/heads/main/classification_4Disease_best.pt",
+    "Cotton": "https://github.com/krishna90520/crop_/raw/refs/heads/main/re_do_cotton_2best.pt",
+    "Groundnut": "https://github.com/krishna90520/crop_/raw/refs/heads/main/groundnut_best.pt"
 }
 
 # Define class labels for each crop
@@ -37,12 +40,22 @@ CLASS_LABELS = {
                "leaf_hopper_jassids", "leaf_redding", "leaf_variegation"]
 }
 
+# Modify model loading to use GitHub token for authentication
+def download_model_with_token(model_url, model_path):
+    headers = {'Authorization': f'token {GITHUB_TOKEN}'}
+    response = requests.get(model_url, headers=headers)
+    if response.status_code == 200:
+        with open(model_path, 'wb') as f:
+            f.write(response.content)
+    else:
+        st.error(f"Failed to download model: {model_url}. Status Code: {response.status_code}")
+        return None
+
 # Cache model loading to avoid reloading on every classification
 @st.cache_resource
 def load_model(crop_name):
     """Loads the YOLOv5 model only once per crop type."""
     try:
-        # Handle special cases where capitalization might fail
         crop_name = crop_name.strip().capitalize()  # Capitalizes only the first letter
 
         # Handle special cases for crop names
@@ -52,16 +65,10 @@ def load_model(crop_name):
         if model_url is None:
             raise ValueError(f"No model found for crop: {crop_name}")
 
-        # Download the model to the temporary directory
+        # Download the model to the temporary directory using the token
         model_path = os.path.join("/tmp", f"{crop_name}_model.pt")
         if not os.path.exists(model_path):
-            response = requests.get(model_url)
-            if response.status_code == 200:
-                with open(model_path, 'wb') as f:
-                    f.write(response.content)
-            else:
-                st.error(f"Failed to download model: {model_url}. Status Code: {response.status_code}")
-                return None
+            download_model_with_token(model_url, model_path)
 
         # Load the model using Ultralytics YOLOv5
         model = torch.hub.load('ultralytics/yolov5:v7.0', 'custom', path=model_path, force_reload=True, device='cpu')
