@@ -164,9 +164,9 @@
 #                 if predicted_class in precautions_dict:
 #                     st.subheader("Precautions/Remedies:")
 #                     for item in precautions_dict[predicted_class]:
-#                         st.write(f"- {item}")
+#                         (f"- {item}")
 #                 else:
-#                     st.write("No precautions available.")
+#                     ("No precautions available.")
 
 
 
@@ -267,11 +267,11 @@ def classify_image(img, crop_name):
 
     # Extract raw prediction scores
     output = results[0]  
-    st.write(output, "this is the output")
+    # st.write(output, "this is the output")
     softmax = torch.nn.functional.softmax(output, dim=0)  # Apply softmax to get probabilities
-    st.write(softmax , "softmax")
+    # st.write(softmax , "softmax")
     confidence, class_idx = torch.max(softmax, dim=0)  # Get highest confidence prediction
-    st.write(confidence, class_idx , "confidence, class_idx")
+    # st.write(confidence, class_idx , "confidence, class_idx")
 
     # Ensure confidence score is properly extracted
     confidence = confidence.item()  # Convert tensor to float
@@ -306,7 +306,7 @@ if uploaded_image:
     if st.button("Run Classification"):
         with st.spinner("Running classification..."):
             predicted_class, confidence = classify_image(img, crop_selection)
-            st.write(predicted_class, confidence, "predicted_class, confidence")
+            # st.write(predicted_class, confidence, "predicted_class, confidence")
 
             if predicted_class is None or confidence < CONFIDENCE_THRESHOLD:
                 st.warning(f"No disease detected (Confidence: {confidence:.2f})")
