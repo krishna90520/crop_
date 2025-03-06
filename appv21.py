@@ -180,7 +180,7 @@ from torchvision import transforms
 import requests
 
 # Confidence threshold for predictions
-CONFIDENCE_THRESHOLD = 0.20 
+CONFIDENCE_THRESHOLD = 0.40 
 
 # GitHub Token (Replace with your actual token)
 GITHUB_TOKEN = "your_github_token_here"
