@@ -181,11 +181,11 @@ import numpy as np
 from torchvision import transforms
 import requests
 
-# Debugging: Print Model Confidence Scores
+# Debug Mode
 DEBUG_MODE = True
 
 # Set Confidence Threshold
-CONFIDENCE_THRESHOLD = 0.50  # Set to 50% for debugging; change to 80% after testing.
+CONFIDENCE_THRESHOLD = 0.80  # Keep 80% after debugging
 
 # GitHub Token for Model Download
 GITHUB_TOKEN = "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"
@@ -284,22 +284,35 @@ def classify_image(img, crop_name):
     with torch.no_grad():
         logits = model(img_tensor)  # Raw outputs (logits)
 
+        # 🔥 Debugging Raw Logits
+        if DEBUG_MODE:
+            st.write(f"Raw Model Logits: {logits}")
+
         # 🔥 Apply Softmax to get probabilities
         probs = F.softmax(logits, dim=1).cpu().numpy()[0]  
+
+        # 🔥 Debugging Class Probabilities
+        if DEBUG_MODE:
+            st.write(f"Softmax Probabilities: {probs}")
 
         class_idx = np.argmax(probs)
         confidence = probs[class_idx]  # Confidence should be in range [0,1]
 
+        # 🔥 Debugging Predicted Class
         if DEBUG_MODE:
-            st.write(f"Raw Model Output: {logits}")
-            st.write(f"Softmax Probabilities: {probs}")
             st.write(f"Predicted Class Index: {class_idx}")
             st.write(f"Confidence Score: {confidence}")
+
+        # Ensure correct label mapping
+        if class_idx < len(CLASS_LABELS[crop_name]):
+            predicted_class = CLASS_LABELS[crop_name][class_idx]
+        else:
+            predicted_class = "Unknown"
 
         if confidence < CONFIDENCE_THRESHOLD:
             return None, None  # Ignore low-confidence results
 
-        return CLASS_LABELS[crop_name][class_idx], confidence
+        return predicted_class, confidence
 
 # Streamlit UI
 st.title("Crop Disease Detection")
@@ -317,9 +330,10 @@ if uploaded_image:
         with st.spinner("Running classification..."):
             predicted_class, confidence = classify_image(img, crop_selection)
             if predicted_class is None:
-                st.warning("Prediction confidence is below 50% or inference failed. Try another image.")
+                st.warning("Prediction confidence is below 80% or inference failed. Try another image.")
             else:
                 st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
+
 
 
 
