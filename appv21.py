@@ -232,6 +232,7 @@ def load_model(crop_name):
         # Load model checkpoint
         checkpoint = torch.load(model_path, map_location="cpu")
 
+        # Ensure we correctly extract the model from the checkpoint
         if isinstance(checkpoint, dict) and "model" in checkpoint:
             model = checkpoint["model"]
         elif isinstance(checkpoint, dict) and "state_dict" in checkpoint:
@@ -275,30 +276,39 @@ def classify_image(img, crop_name):
 
     img_tensor = preprocess_image(img)
 
-    with torch.no_grad():
-        results = model(img_tensor)  # Model inference
-
-    # Extract class probabilities
-    if isinstance(results, torch.Tensor):
-        probs = results.numpy()
-    else:
-        probs = results.cpu().numpy()
-
-    class_idx = np.argmax(probs)
-    confidence = probs[0, class_idx]
-
-    # Check confidence threshold (80%)
-    if confidence < CONFIDENCE_THRESHOLD:
-        return None, None  # Ignore low-confidence results
-
-    # Map to class label
-    try:
-        class_label = CLASS_LABELS[crop_name][class_idx]
-    except KeyError:
-        st.error(f"Error: '{crop_name}' not found in class labels.")
+    # Ensure correct input shape
+    if img_tensor.shape[1] != 3:
+        st.error(f"Invalid input shape: {img_tensor.shape}. Expected (1, 3, 224, 224).")
         return None, None
 
-    return class_label, confidence
+    with torch.no_grad():
+        try:
+            results = model(img_tensor)  # Model inference
+
+            # Ensure results are in expected format
+            if isinstance(results, torch.Tensor):
+                probs = results.numpy()
+            else:
+                probs = results.cpu().numpy()
+
+            class_idx = np.argmax(probs)
+            confidence = probs[0, class_idx]
+
+            # Check confidence threshold (80%)
+            if confidence < CONFIDENCE_THRESHOLD:
+                return None, None  # Ignore low-confidence results
+
+            # Map to class label
+            try:
+                class_label = CLASS_LABELS[crop_name][class_idx]
+            except KeyError:
+                st.error(f"Error: '{crop_name}' not found in class labels.")
+                return None, None
+
+            return class_label, confidence
+        except Exception as e:
+            st.error(f"Inference error: {str(e)}")
+            return None, None
 
 # Streamlit UI
 st.markdown("""
@@ -325,7 +335,7 @@ if uploaded_image:
         with st.spinner("Running classification..."):
             predicted_class, confidence = classify_image(img, crop_selection)
             if predicted_class is None:
-                st.warning("Prediction confidence is below 80%. Try another image.")
+                st.warning("Prediction confidence is below 80% or inference failed. Try another image.")
             else:
                 st.subheader("Prediction Results")
                 st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
@@ -344,6 +354,7 @@ if uploaded_image:
                         st.write(f"- {item}")
                 else:
                     st.write("No precautions available.")
+
 
 
 
