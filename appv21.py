@@ -188,7 +188,7 @@ GITHUB_TOKEN = "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"
 
 # Model URLs
 crop_model_mapping = {
-    "Paddy": "https://github.com/krishna90520/crop_/raw/refs/heads/main/classification_4Disease_best.pt",
+    "Paddy": classification_4Disease_best.pt,
     "Cotton": "https://github.com/krishna90520/crop_/raw/refs/heads/main/re_do_cotton_2best.pt",
     "Groundnut": "https://github.com/krishna90520/crop_/raw/refs/heads/main/groundnut_best.pt"
 }
