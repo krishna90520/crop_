@@ -181,10 +181,13 @@ import numpy as np
 from torchvision import transforms
 import requests
 
-# Confidence Threshold (80%)
-CONFIDENCE_THRESHOLD = 0.80
+# Debugging: Print Model Confidence Scores
+DEBUG_MODE = True
 
-# GitHub Token (Replace with your own)
+# Set Confidence Threshold
+CONFIDENCE_THRESHOLD = 0.50  # Set to 50% for debugging; change to 80% after testing.
+
+# GitHub Token for Model Download
 GITHUB_TOKEN = "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"
 
 # Model URLs
@@ -273,6 +276,7 @@ def preprocess_image(img):
 def classify_image(img, crop_name):
     model = load_model(crop_name)
     if model is None:
+        st.error("Error: Model failed to load.")
         return None, None
 
     img_tensor = preprocess_image(img)
@@ -285,6 +289,12 @@ def classify_image(img, crop_name):
 
         class_idx = np.argmax(probs)
         confidence = probs[class_idx]  # Confidence should be in range [0,1]
+
+        if DEBUG_MODE:
+            st.write(f"Raw Model Output: {logits}")
+            st.write(f"Softmax Probabilities: {probs}")
+            st.write(f"Predicted Class Index: {class_idx}")
+            st.write(f"Confidence Score: {confidence}")
 
         if confidence < CONFIDENCE_THRESHOLD:
             return None, None  # Ignore low-confidence results
@@ -307,7 +317,7 @@ if uploaded_image:
         with st.spinner("Running classification..."):
             predicted_class, confidence = classify_image(img, crop_selection)
             if predicted_class is None:
-                st.warning("Prediction confidence is below 80% or inference failed. Try another image.")
+                st.warning("Prediction confidence is below 50% or inference failed. Try another image.")
             else:
                 st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
 
