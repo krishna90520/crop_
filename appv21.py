@@ -232,7 +232,6 @@ def load_model(crop_name):
         # Load model checkpoint
         checkpoint = torch.load(model_path, map_location="cpu")
 
-        # Ensure we correctly extract the model from the checkpoint
         if isinstance(checkpoint, dict) and "model" in checkpoint:
             model = checkpoint["model"]
         elif isinstance(checkpoint, dict) and "state_dict" in checkpoint:
@@ -251,6 +250,7 @@ def load_model(crop_name):
             st.error("Loaded model is not a valid PyTorch model.")
             return None
 
+        model = model.float()  # 🔥 Convert model weights to float32
         model.eval()
         return model
 
@@ -262,11 +262,11 @@ def load_model(crop_name):
 def preprocess_image(img):
     img = img.convert('RGB')
     preprocess = transforms.Compose([
-        transforms.Resize((224, 224)),  # YOLOv5 classification input size
+        transforms.Resize((224, 224)),
         transforms.ToTensor(),
     ])
-    img_tensor = preprocess(img).unsqueeze(0)  # Add batch dimension
-    return img_tensor
+    img_tensor = preprocess(img).unsqueeze(0)
+    return img_tensor.to(torch.float32)  # 🔥 Ensure input is float32
 
 # Perform classification
 def classify_image(img, crop_name):
@@ -276,57 +276,26 @@ def classify_image(img, crop_name):
 
     img_tensor = preprocess_image(img)
 
-    # Ensure correct input shape
-    if img_tensor.shape[1] != 3:
-        st.error(f"Invalid input shape: {img_tensor.shape}. Expected (1, 3, 224, 224).")
-        return None, None
-
     with torch.no_grad():
-        try:
-            results = model(img_tensor)  # Model inference
+        results = model(img_tensor)
 
-            # Ensure results are in expected format
-            if isinstance(results, torch.Tensor):
-                probs = results.numpy()
-            else:
-                probs = results.cpu().numpy()
+        probs = results.cpu().numpy()
+        class_idx = np.argmax(probs)
+        confidence = probs[0, class_idx]
 
-            class_idx = np.argmax(probs)
-            confidence = probs[0, class_idx]
+        if confidence < CONFIDENCE_THRESHOLD:
+            return None, None  # Ignore low-confidence results
 
-            # Check confidence threshold (80%)
-            if confidence < CONFIDENCE_THRESHOLD:
-                return None, None  # Ignore low-confidence results
-
-            # Map to class label
-            try:
-                class_label = CLASS_LABELS[crop_name][class_idx]
-            except KeyError:
-                st.error(f"Error: '{crop_name}' not found in class labels.")
-                return None, None
-
-            return class_label, confidence
-        except Exception as e:
-            st.error(f"Inference error: {str(e)}")
-            return None, None
+        return CLASS_LABELS[crop_name][class_idx], confidence
 
 # Streamlit UI
-st.markdown("""
-    <style>
-    .title { text-align: center; color: #4CAF50; font-size: 36px; }
-    .red-label { color: red; font-size: 20px; }
-    </style>
-""", unsafe_allow_html=True)
-
-st.markdown('<div class="title">Crop Disease Detection</div>', unsafe_allow_html=True)
+st.title("Crop Disease Detection")
 
 crop_selection = st.selectbox("Select the crop", ["Paddy", "Cotton", "Groundnut"])
 st.write(f"Selected Crop: {crop_selection}")
 
-# Image upload
 uploaded_image = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
-# Run classification
 if uploaded_image:
     img = Image.open(uploaded_image)
     st.image(img, caption="Uploaded Image.", use_container_width=True)
@@ -337,24 +306,7 @@ if uploaded_image:
             if predicted_class is None:
                 st.warning("Prediction confidence is below 80% or inference failed. Try another image.")
             else:
-                st.subheader("Prediction Results")
                 st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
-
-                # Display precautions
-                precautions_dict = {
-                    "brown_spot": ["Use resistant varieties", "Apply fungicides"],
-                    "leaf_blast": ["Use resistant varieties", "Avoid excess nitrogen"],
-                    "rice_hispa": ["Use insecticides", "Manual removal of larvae"],
-                    "sheath_blight": ["Use fungicides", "Improve water management"],
-                }
-
-                if predicted_class in precautions_dict:
-                    st.subheader("Precautions/Remedies:")
-                    for item in precautions_dict[predicted_class]:
-                        st.write(f"- {item}")
-                else:
-                    st.write("No precautions available.")
-
 
 
 
