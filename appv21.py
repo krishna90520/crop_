@@ -296,6 +296,7 @@ if uploaded_image:
     if st.button("Run Classification"):
         with st.spinner("Running classification..."):
             predicted_class, confidence = classify_image(img, crop_selection)
+            st.write(predicted_class, confidence, "predicted_class, confidence")
 
             if predicted_class is None or confidence < CONFIDENCE_THRESHOLD:
                 st.warning(f"No disease detected (Confidence: {confidence:.2f})")
