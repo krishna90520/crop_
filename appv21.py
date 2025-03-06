@@ -234,15 +234,22 @@ def load_model(crop_name):
         st.error(f"Model loading failed: {str(e)}")
         return None
 
-# Preprocess image
-def preprocess_image(img):
-    img = img.convert('RGB')
-    preprocess = transforms.Compose([
-        transforms.Resize((640, 640)),  
+# # Preprocess image
+# def preprocess_image(img):
+#     img = img.convert('RGB')
+#     preprocess = transforms.Compose([
+#         transforms.Resize((640, 640)),  
+#         transforms.ToTensor(),
+#     ])
+#     img_tensor = preprocess(img).unsqueeze(0)  
+#     return img_tensor
+
+def preprocess_image(image):
+    transform = transforms.Compose([
+        transforms.Resize((640, 640)),
         transforms.ToTensor(),
-    ])
-    img_tensor = preprocess(img).unsqueeze(0)  
-    return img_tensor
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    return transform(image).unsqueeze(0)  # Add batch dimension
 
 # Perform classification
 def classify_image(img, crop_name):
