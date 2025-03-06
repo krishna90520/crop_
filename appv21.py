@@ -10,6 +10,12 @@ import requests
 cache_dir = os.path.expanduser('~/.cache/torch/hub/')
 os.makedirs(cache_dir, exist_ok=True)
 
+# Create the trusted_list file if missing
+trusted_list_path = os.path.join(cache_dir, "trusted_list")
+if not os.path.exists(trusted_list_path):
+    with open(trusted_list_path, 'w') as f:
+        f.write("[]")  # Empty JSON array for trusted list
+
 # Set environment variable to avoid cache-related issues
 os.environ["TORCH_HOME"] = "/tmp/torch_cache"  # Avoid the default cache directory for Torch
 
@@ -50,8 +56,12 @@ def load_model(crop_name):
         model_path = os.path.join("/tmp", f"{crop_name}_model.pt")
         if not os.path.exists(model_path):
             response = requests.get(model_url)
-            with open(model_path, 'wb') as f:
-                f.write(response.content)
+            if response.status_code == 200:
+                with open(model_path, 'wb') as f:
+                    f.write(response.content)
+            else:
+                st.error(f"Failed to download model: {model_url}. Status Code: {response.status_code}")
+                return None
 
         # Load the model using Ultralytics YOLOv5
         model = torch.hub.load('ultralytics/yolov5:v7.0', 'custom', path=model_path, force_reload=True, device='cpu')
@@ -151,4 +161,3 @@ if uploaded_image:
                         st.write(f"- {item}")
                 else:
                     st.write("No precautions available.")
-
