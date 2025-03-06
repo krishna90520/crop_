@@ -173,6 +173,7 @@
 
 import os
 import torch
+import torch.nn as nn
 import streamlit as st
 from PIL import Image
 import numpy as np
@@ -209,10 +210,10 @@ def download_model(model_url, model_path):
         st.error(f"Failed to download model: {model_url}. Status Code: {response.status_code}")
         return None
 
-# Cache model loading
+# Function to load model properly
 @st.cache_resource
 def load_model(crop_name):
-    """Loads the YOLOv5 classification model using direct `torch.load()`"""
+    """Loads the YOLOv5 classification model properly by handling different save formats."""
     try:
         crop_name = crop_name.strip().capitalize()
         model_url = crop_model_mapping.get(crop_name)
@@ -220,17 +221,38 @@ def load_model(crop_name):
         if not model_url:
             raise ValueError(f"No model found for crop: {crop_name}")
 
-        # Download the model
+        # Download the model if not already available
         model_path = os.path.join("/tmp", f"{crop_name}_model.pt")
         if not os.path.exists(model_path):
             download_model(model_url, model_path)
 
-        # Load model directly using torch
-        model = torch.load(model_path, map_location="cpu")
+        # Load model checkpoint
+        checkpoint = torch.load(model_path, map_location="cpu")
 
-        # Ensure model is in eval mode
-        model.eval()
+        if isinstance(checkpoint, dict) and "model" in checkpoint:
+            # Extract model from checkpoint if available
+            model = checkpoint["model"]
+        elif isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+            # If only state_dict is available, define a model first
+            model = nn.Sequential(
+                nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.Flatten(),
+                nn.Linear(16 * 112 * 112, len(CLASS_LABELS[crop_name]))  # Adjust output based on crop
+            )
+            model.load_state_dict(checkpoint["state_dict"])
+        else:
+            model = checkpoint  # If already a complete model
+
+        # Ensure it's a torch.nn.Module instance
+        if not isinstance(model, nn.Module):
+            st.error("Loaded model is not a valid PyTorch model.")
+            return None
+
+        model.eval()  # Set model to evaluation mode
         return model
+
     except Exception as e:
         st.error(f"Model loading failed: {str(e)}")
         return None
@@ -239,7 +261,7 @@ def load_model(crop_name):
 def preprocess_image(img):
     img = img.convert('RGB')
     preprocess = transforms.Compose([
-        transforms.Resize((224, 224)),  # Correct YOLOv5 classification input size
+        transforms.Resize((224, 224)),  # YOLOv5 classification input size
         transforms.ToTensor(),
     ])
     img_tensor = preprocess(img).unsqueeze(0)  # Add batch dimension
@@ -257,7 +279,11 @@ def classify_image(img, crop_name):
         results = model(img_tensor)  # Model inference
 
     # Extract class probabilities
-    probs = results.numpy()
+    if isinstance(results, torch.Tensor):
+        probs = results.numpy()
+    else:
+        probs = results.cpu().numpy()
+
     class_idx = np.argmax(probs)
     confidence = probs[0, class_idx]
 
@@ -314,7 +340,6 @@ if uploaded_image:
                         st.write(f"- {item}")
                 else:
                     st.write("No precautions available.")
-
 
 
 
