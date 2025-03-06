@@ -179,24 +179,10 @@ import numpy as np
 from torchvision import transforms
 import requests
 
-# GitHub Personal Access Token (replace with your own token)
-GITHUB_TOKEN = "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"  # Replace with your token
+# GitHub Token (Replace with your own)
+GITHUB_TOKEN = "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"
 
-# Ensure the cache directory exists
-cache_dir = os.path.expanduser('~/.cache/torch/hub/')
-os.makedirs(cache_dir, exist_ok=True)
-
-# Create the trusted_list file if missing
-trusted_list_path = os.path.join(cache_dir, "trusted_list")
-if not os.path.exists(trusted_list_path):
-    with open(trusted_list_path, 'w') as f:
-        f.write("[]")
-
-# Set environment variables
-os.environ["TORCH_HOME"] = "/tmp/torch_cache"
-os.environ["STREAMLIT_SERVER_ENABLE_WATCHER"] = "false"
-
-# Mapping of crop models
+# Model URLs
 crop_model_mapping = {
     "Paddy": "https://github.com/krishna90520/crop_/raw/refs/heads/main/classification_4Disease_best.pt",
     "Cotton": "https://github.com/krishna90520/crop_/raw/refs/heads/main/re_do_cotton_2best.pt",
@@ -212,10 +198,10 @@ CLASS_LABELS = {
 }
 
 # Function to download model
-def download_model_with_token(model_url, model_path):
+def download_model(model_url, model_path):
     headers = {'Authorization': f'token {GITHUB_TOKEN}'}
     response = requests.get(model_url, headers=headers)
-    
+
     if response.status_code == 200:
         with open(model_path, 'wb') as f:
             f.write(response.content)
@@ -226,7 +212,7 @@ def download_model_with_token(model_url, model_path):
 # Cache model loading
 @st.cache_resource
 def load_model(crop_name):
-    """Loads the YOLOv5 classification model."""
+    """Loads the YOLOv5 classification model using direct `torch.load()`"""
     try:
         crop_name = crop_name.strip().capitalize()
         model_url = crop_model_mapping.get(crop_name)
@@ -237,16 +223,12 @@ def load_model(crop_name):
         # Download the model
         model_path = os.path.join("/tmp", f"{crop_name}_model.pt")
         if not os.path.exists(model_path):
-            download_model_with_token(model_url, model_path)
+            download_model(model_url, model_path)
 
-        # Load YOLO classification model
-        model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, source='local', force_reload=True)
+        # Load model directly using torch
+        model = torch.load(model_path, map_location="cpu")
 
-        # Check if it's a classification model
-        if model.model.names[0] != CLASS_LABELS[crop_name][0]:
-            st.error("Loaded model might not be a classifier. Please check your model files.")
-            return None
-
+        # Ensure model is in eval mode
         model.eval()
         return model
     except Exception as e:
@@ -332,6 +314,7 @@ if uploaded_image:
                         st.write(f"- {item}")
                 else:
                     st.write("No precautions available.")
+
 
 
 
