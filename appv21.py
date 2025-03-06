@@ -185,7 +185,7 @@ import requests
 DEBUG_MODE = True
 
 # Set Confidence Threshold
-CONFIDENCE_THRESHOLD = 0.80  # Keep 80% after debugging
+CONFIDENCE_THRESHOLD = 0.40  # Keep 80% after debugging
 
 # GitHub Token for Model Download
 GITHUB_TOKEN = "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"
