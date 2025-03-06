@@ -179,9 +179,8 @@ import numpy as np
 from torchvision import transforms
 import requests
 
-# Confidence threshold (adjustable)
-CONFIDENCE_THRESHOLD = 0.60
-DEBUG_MODE = True  # Set to True for debugging confidence scores
+# Confidence threshold for predictions
+CONFIDENCE_THRESHOLD = 0.80  
 
 # GitHub Token (Replace with your actual token)
 GITHUB_TOKEN = "your_github_token_here"
@@ -189,12 +188,6 @@ GITHUB_TOKEN = "your_github_token_here"
 # Ensure cache directory exists
 cache_dir = os.path.expanduser('~/.cache/torch/hub/')
 os.makedirs(cache_dir, exist_ok=True)
-
-# Create trusted_list file if missing
-trusted_list_path = os.path.join(cache_dir, "trusted_list")
-if not os.path.exists(trusted_list_path):
-    with open(trusted_list_path, 'w') as f:
-        f.write("[]")  # Empty JSON array for trusted list
 
 # Mapping of crop to model file path (GitHub raw URLs)
 crop_model_mapping = {
@@ -237,7 +230,7 @@ def load_model(crop_name):
         if not os.path.exists(model_path):
             download_model_with_token(model_url, model_path)
 
-        # Load model with correct weights and fix mismatched tensor types
+        # Load model
         model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True, device='cpu')
         model.eval()
         return model
@@ -276,15 +269,10 @@ def classify_image(img, crop_name):
     # Ensure confidence score is properly extracted
     confidence = confidence.item()
     
-    # Debugging confidence scores
-    if DEBUG_MODE:
-        st.write(f"Raw Confidence Score: {confidence:.2f}")
-
     # Ensure index is within range
     try:
         class_label = CLASS_LABELS[crop_name][class_idx.item()]
     except IndexError:
-        st.error(f"Invalid class index: {class_idx.item()} for crop {crop_name}")
         return None, confidence
 
     return class_label, confidence
@@ -313,7 +301,7 @@ if uploaded_image:
             predicted_class, confidence = classify_image(img, crop_selection)
 
             if predicted_class is None or confidence < CONFIDENCE_THRESHOLD:
-                st.warning(f"No disease detected (Confidence: {confidence:.2f}). Try another image.")
+                st.warning(f"No disease detected (Confidence: {confidence:.2f})")
             else:
                 st.subheader("Prediction Results")
                 st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
@@ -332,6 +320,7 @@ if uploaded_image:
                         st.write(f"- {item}")
                 else:
                     st.write("No precautions available.")
+
 
 
 
