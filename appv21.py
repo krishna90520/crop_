@@ -185,10 +185,6 @@ CONFIDENCE_THRESHOLD = 0.80
 # GitHub Token (Replace with your actual token)
 GITHUB_TOKEN = "your_github_token_here"
 
-# Ensure cache directory exists
-cache_dir = os.path.expanduser('~/.cache/torch/hub/')
-os.makedirs(cache_dir, exist_ok=True)
-
 # Mapping of crop to model file path (GitHub raw URLs)
 crop_model_mapping = {
     "Paddy": "https://github.com/krishna90520/crop_/raw/refs/heads/main/classification_4Disease_best.pt",
@@ -263,12 +259,13 @@ def classify_image(img, crop_name):
         results = model(img_tensor)
 
     # Extract raw prediction scores
-    output = results[0]
-    confidence, class_idx = torch.max(output, dim=0)
+    output = results[0]  
+    softmax = torch.nn.functional.softmax(output, dim=0)  # Apply softmax to get probabilities
+    confidence, class_idx = torch.max(softmax, dim=0)  # Get highest confidence prediction
 
     # Ensure confidence score is properly extracted
-    confidence = confidence.item()
-    
+    confidence = confidence.item()  # Convert tensor to float
+
     # Ensure index is within range
     try:
         class_label = CLASS_LABELS[crop_name][class_idx.item()]
@@ -320,12 +317,4 @@ if uploaded_image:
                         st.write(f"- {item}")
                 else:
                     st.write("No precautions available.")
-
-
-
-
-
-
-
-
 
