@@ -173,24 +173,30 @@
 
 import os
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import streamlit as st
 from PIL import Image
 import numpy as np
 from torchvision import transforms
 import requests
 
-# Debug Mode
-DEBUG_MODE = True
+# Confidence threshold (adjustable)
+CONFIDENCE_THRESHOLD = 0.80
+DEBUG_MODE = True  # Set to True for debugging confidence scores
 
-# Set Confidence Threshold
-CONFIDENCE_THRESHOLD = 0.40  # Keep 80% after debugging
+# GitHub Token (Replace with your actual token)
+GITHUB_TOKEN = "your_github_token_here"
 
-# GitHub Token for Model Download
-GITHUB_TOKEN = "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"
+# Ensure cache directory exists
+cache_dir = os.path.expanduser('~/.cache/torch/hub/')
+os.makedirs(cache_dir, exist_ok=True)
 
-# Model URLs
+# Create trusted_list file if missing
+trusted_list_path = os.path.join(cache_dir, "trusted_list")
+if not os.path.exists(trusted_list_path):
+    with open(trusted_list_path, 'w') as f:
+        f.write("[]")  # Empty JSON array for trusted list
+
+# Mapping of crop to model file path (GitHub raw URLs)
 crop_model_mapping = {
     "Paddy": "https://github.com/krishna90520/crop_/raw/refs/heads/main/classification_4Disease_best.pt",
     "Cotton": "https://github.com/krishna90520/crop_/raw/refs/heads/main/re_do_cotton_2best.pt",
@@ -205,11 +211,10 @@ CLASS_LABELS = {
                "leaf_hopper_jassids", "leaf_redding", "leaf_variegation"]
 }
 
-# Function to download model
-def download_model(model_url, model_path):
+# Function to download model with GitHub token
+def download_model_with_token(model_url, model_path):
     headers = {'Authorization': f'token {GITHUB_TOKEN}'}
     response = requests.get(model_url, headers=headers)
-
     if response.status_code == 200:
         with open(model_path, 'wb') as f:
             f.write(response.content)
@@ -217,47 +222,25 @@ def download_model(model_url, model_path):
         st.error(f"Failed to download model: {model_url}. Status Code: {response.status_code}")
         return None
 
-# Function to load model properly
+# Cache model loading to avoid reloading
 @st.cache_resource
 def load_model(crop_name):
-    """Loads the YOLOv5 classification model properly by handling different save formats."""
+    """Loads the YOLOv5 model once per crop type."""
     try:
         crop_name = crop_name.strip().capitalize()
-        model_url = crop_model_mapping.get(crop_name)
 
+        model_url = crop_model_mapping.get(crop_name)
         if not model_url:
             raise ValueError(f"No model found for crop: {crop_name}")
 
-        # Download the model if not already available
         model_path = os.path.join("/tmp", f"{crop_name}_model.pt")
         if not os.path.exists(model_path):
-            download_model(model_url, model_path)
+            download_model_with_token(model_url, model_path)
 
-        # Load model checkpoint
-        checkpoint = torch.load(model_path, map_location="cpu")
-
-        if isinstance(checkpoint, dict) and "model" in checkpoint:
-            model = checkpoint["model"]
-        elif isinstance(checkpoint, dict) and "state_dict" in checkpoint:
-            model = nn.Sequential(
-                nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
-                nn.ReLU(),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.Flatten(),
-                nn.Linear(16 * 112 * 112, len(CLASS_LABELS[crop_name]))  # Adjust output based on crop
-            )
-            model.load_state_dict(checkpoint["state_dict"])
-        else:
-            model = checkpoint  # If already a complete model
-
-        if not isinstance(model, nn.Module):
-            st.error("Loaded model is not a valid PyTorch model.")
-            return None
-
-        model = model.float()  # 🔥 Convert model weights to float32
+        # Load model with correct weights and fix mismatched tensor types
+        model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True, device='cpu')
         model.eval()
         return model
-
     except Exception as e:
         st.error(f"Model loading failed: {str(e)}")
         return None
@@ -266,56 +249,55 @@ def load_model(crop_name):
 def preprocess_image(img):
     img = img.convert('RGB')
     preprocess = transforms.Compose([
-        transforms.Resize((224, 224)),
+        transforms.Resize((640, 640)),  
         transforms.ToTensor(),
     ])
-    img_tensor = preprocess(img).unsqueeze(0)
-    return img_tensor.to(torch.float32)  # 🔥 Ensure input is float32
+    img_tensor = preprocess(img).unsqueeze(0)  
+    return img_tensor
 
 # Perform classification
 def classify_image(img, crop_name):
     model = load_model(crop_name)
     if model is None:
-        st.error("Error: Model failed to load.")
         return None, None
 
     img_tensor = preprocess_image(img)
 
+    # Ensure input tensor type matches model weight type
+    img_tensor = img_tensor.to(torch.float32)  # Convert to float32 for CPU inference
+
     with torch.no_grad():
-        logits = model(img_tensor)  # Raw outputs (logits)
+        results = model(img_tensor)
 
-        # 🔥 Debugging Raw Logits
-        if DEBUG_MODE:
-            st.write(f"Raw Model Logits: {logits}")
+    # Extract raw prediction scores
+    output = results[0]
+    confidence, class_idx = torch.max(output, dim=0)
 
-        # 🔥 Apply Softmax to get probabilities
-        probs = F.softmax(logits, dim=1).cpu().numpy()[0]  
+    # Ensure confidence score is properly extracted
+    confidence = confidence.item()
+    
+    # Debugging confidence scores
+    if DEBUG_MODE:
+        st.write(f"Raw Confidence Score: {confidence:.2f}")
 
-        # 🔥 Debugging Class Probabilities
-        if DEBUG_MODE:
-            st.write(f"Softmax Probabilities: {probs}")
+    # Ensure index is within range
+    try:
+        class_label = CLASS_LABELS[crop_name][class_idx.item()]
+    except IndexError:
+        st.error(f"Invalid class index: {class_idx.item()} for crop {crop_name}")
+        return None, confidence
 
-        class_idx = np.argmax(probs)
-        confidence = probs[class_idx]  # Confidence should be in range [0,1]
-
-        # 🔥 Debugging Predicted Class
-        if DEBUG_MODE:
-            st.write(f"Predicted Class Index: {class_idx}")
-            st.write(f"Confidence Score: {confidence}")
-
-        # Ensure correct label mapping
-        if class_idx < len(CLASS_LABELS[crop_name]):
-            predicted_class = CLASS_LABELS[crop_name][class_idx]
-        else:
-            predicted_class = "Unknown"
-
-        if confidence < CONFIDENCE_THRESHOLD:
-            return None, None  # Ignore low-confidence results
-
-        return predicted_class, confidence
+    return class_label, confidence
 
 # Streamlit UI
-st.title("Crop Disease Detection")
+st.markdown("""
+    <style>
+    .title { text-align: center; color: #4CAF50; font-size: 36px; }
+    .red-label { color: red; font-size: 20px; }
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="title">Crop Disease Detection</div>', unsafe_allow_html=True)
 
 crop_selection = st.selectbox("Select the crop", ["Paddy", "Cotton", "Groundnut"])
 st.write(f"Selected Crop: {crop_selection}")
@@ -323,16 +305,34 @@ st.write(f"Selected Crop: {crop_selection}")
 uploaded_image = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
 if uploaded_image:
-    img = Image.open(uploaded_image)
+    img = Image.open(uploaded_image).convert("RGB")
     st.image(img, caption="Uploaded Image.", use_container_width=True)
 
     if st.button("Run Classification"):
         with st.spinner("Running classification..."):
             predicted_class, confidence = classify_image(img, crop_selection)
+
             if predicted_class is None:
-                st.warning("Prediction confidence is below 80% or inference failed. Try another image.")
+                st.warning(f"Prediction confidence is too low: {confidence:.2f}. Try another image.")
             else:
+                st.subheader("Prediction Results")
                 st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
+
+                # Display precautions
+                precautions_dict = {
+                    "brown_spot": ["Use resistant varieties", "Apply fungicides"],
+                    "leaf_blast": ["Use resistant varieties", "Avoid excess nitrogen fertilization"],
+                    "rice_hispa": ["Use insecticides", "Manual removal of larvae"],
+                    "sheath_blight": ["Use fungicides", "Improve water management"],
+                }
+
+                if predicted_class in precautions_dict:
+                    st.subheader("Precautions/Remedies:")
+                    for item in precautions_dict[predicted_class]:
+                        st.write(f"- {item}")
+                else:
+                    st.write("No precautions available.")
+
 
 
 
