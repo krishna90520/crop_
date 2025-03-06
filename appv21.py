@@ -174,6 +174,7 @@
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import streamlit as st
 from PIL import Image
 import numpy as np
@@ -277,11 +278,13 @@ def classify_image(img, crop_name):
     img_tensor = preprocess_image(img)
 
     with torch.no_grad():
-        results = model(img_tensor)
+        logits = model(img_tensor)  # Raw outputs (logits)
 
-        probs = results.cpu().numpy()
+        # 🔥 Apply Softmax to get probabilities
+        probs = F.softmax(logits, dim=1).cpu().numpy()[0]  
+
         class_idx = np.argmax(probs)
-        confidence = probs[0, class_idx]
+        confidence = probs[class_idx]  # Confidence should be in range [0,1]
 
         if confidence < CONFIDENCE_THRESHOLD:
             return None, None  # Ignore low-confidence results
@@ -307,6 +310,7 @@ if uploaded_image:
                 st.warning("Prediction confidence is below 80% or inference failed. Try another image.")
             else:
                 st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
+
 
 
 
