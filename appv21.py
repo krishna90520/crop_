@@ -180,7 +180,7 @@ from torchvision import transforms
 import requests
 
 # Confidence threshold (adjustable)
-CONFIDENCE_THRESHOLD = 0.80
+CONFIDENCE_THRESHOLD = 0.60
 DEBUG_MODE = True  # Set to True for debugging confidence scores
 
 # GitHub Token (Replace with your actual token)
@@ -312,8 +312,8 @@ if uploaded_image:
         with st.spinner("Running classification..."):
             predicted_class, confidence = classify_image(img, crop_selection)
 
-            if predicted_class is None:
-                st.warning(f"Prediction confidence is too low: {confidence:.2f}. Try another image.")
+            if predicted_class is None or confidence < CONFIDENCE_THRESHOLD:
+                st.warning(f"No disease detected (Confidence: {confidence:.2f}). Try another image.")
             else:
                 st.subheader("Prediction Results")
                 st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
