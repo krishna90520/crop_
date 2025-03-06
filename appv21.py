@@ -260,6 +260,7 @@ def classify_image(img, crop_name):
 
     # Extract raw prediction scores
     output = results[0]  
+    st.write(output, "this is the output")
     softmax = torch.nn.functional.softmax(output, dim=0)  # Apply softmax to get probabilities
     confidence, class_idx = torch.max(softmax, dim=0)  # Get highest confidence prediction
 
